@@ -431,7 +431,7 @@ git push origin master --follow-tags
 禁止在 workflow 内联第二份打包/命名逻辑——SvgaViewer 曾因 workflow 从 PagViewer 复制，
 发布出错名资产 `QuickLook.Plugin.PagViewer.qlplugin`。
 
-workflow 关键要素（三个插件仓已按此规范化）：
+workflow 关键要素（四个插件仓已按此规范化；PluginManager 为 WPF 原生面板，无 WebView2/Web 资产）：
 
 | 要素 | 约定 |
 |------|------|
