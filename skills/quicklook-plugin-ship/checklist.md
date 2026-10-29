@@ -148,6 +148,7 @@
 - [ ] README 包含项目结构
 - [ ] README 包含 Credits 节
 - [ ] CHANGELOG 采用统一版本节格式（见 SKILL.md）
+- [ ] 发版前 CHANGELOG 的 [Unreleased] 已转为 `## [X.Y.Z] - 日期`（tag 之后内容与 Release 对不上就是这步没做）
 - [ ] LICENSE 文件存在（GPL-3.0）
 
 ---

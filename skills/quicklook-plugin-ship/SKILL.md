@@ -450,6 +450,7 @@ workflow 关键要素（四个插件仓已按此规范化；PluginManager 为 WP
 - `AGENTS.md` 必须含 `## CI / Release` 节，与 workflow 使用同一资产名（命名改点变了要同步）
 - `Scripts/*.ps1` 一律存 **UTF-8 with BOM**（PowerShell 5.1 读中文注释必需；四个插件仓已统一）
 - `update-version.ps1` 必须校验 `git describe` 输出格式：**仓库还没有任何 tag 时 `--always` 会回退打印 commit hash**，直接当 `AssemblyVersion` 写入会 CS7034 编译失败。四个插件仓已统一为 `^v?\d+(\.\d+){1,3}$`，不合法回退 `1.0.0`（hash 只进 InformationalVersion）
+- Release 说明由 workflow 的 `generate_release_notes: true` 从提交历史自动生成，无需手写；**提交信息本身就是 Release 说明的素材**，保持一行一条、说清用户可感知的变化
 - 落地页从 `releases/latest` 按 `.qlplugin` **扩展名**抓资产，workflow/资产改名不破坏落地页
 - 首次推 tag 前先在本地确认 `Scripts/build.ps1` 能产出正确名的 `.qlplugin`
 
@@ -474,7 +475,7 @@ workflow 关键要素（四个插件仓已按此规范化；PluginManager 为 WP
 
 ### CHANGELOG 格式
 
-统一用简单版本节（三个插件仓一致；**不**采用 Keep a Changelog 的前言与长段散文）：
+统一用简单版本节（四个插件仓一致；**不**采用 Keep a Changelog 的前言与长段散文）：
 
 ```markdown
 # Changelog
@@ -494,6 +495,7 @@ workflow 关键要素（四个插件仓已按此规范化；PluginManager 为 WP
 ```
 
 - 未发布内容放 `## [Unreleased]`，发版时改成 `## [X.Y.Z] - YYYY-MM-DD` 并新建空的 Unreleased 节
+- **打 tag 前必须完成这次转换**（checklist 阶段 5 强制项）——内容挂在 Unreleased 却发了版，CHANGELOG 就和 Release 对不上
 - 节名只用 `Added` / `Changed` / `Fixed` / `Removed`
 
 ## 阶段 6：官方曝光
