@@ -1,0 +1,22 @@
+# Build results
+bin/
+obj/
+
+# NuGet
+*.nupkg
+packages/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Cloned reference projects
+QuickLook.Plugin.LottieFilesViewer/
+QuickLook.Plugin.VideoViewer/
+QuickLook/
+
+# Plugin package
+*.qlplugin
+QuickLook.wiki/

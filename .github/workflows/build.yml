@@ -1,0 +1,73 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ "master" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+env:
+  BUILD_CONFIGURATION: Release
+  PLUGIN_NAME: QuickLook.Plugin.PluginManager
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Update version from git tag
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File Scripts/update-version.ps1
+
+      - name: Build
+        run: dotnet build -c ${{ env.BUILD_CONFIGURATION }}
+
+      - name: Package
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File Scripts/build.ps1 -SkipBuild -SkipVersion
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PLUGIN_NAME }}
+          path: ${{ env.PLUGIN_NAME }}.qlplugin
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PLUGIN_NAME }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.PLUGIN_NAME }}.qlplugin
+          fail_on_unmatched_files: true
+          generate_release_notes: true
