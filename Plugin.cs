@@ -37,7 +37,9 @@ namespace QuickLook.Plugin.PluginManager
             _panel.Initialize(path, context);
 
             context.ViewerContent = _panel;
-            context.Title = Loc.Get("Title");
+            // 插件自身版本显示在预览窗口标题栏（外壳），面板内主标题旁是宿主 QuickLook 的版本
+            var version = typeof(Plugin).Assembly.GetName().Version;
+            context.Title = Loc.Get("Title") + (version != null ? " v" + version.ToString(3) : "");
 
             _panel.Dispatcher.Invoke(() => { context.IsBusy = false; },
                 System.Windows.Threading.DispatcherPriority.Loaded);

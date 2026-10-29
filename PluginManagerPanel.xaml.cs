@@ -1,13 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using QuickLook.Common.Helpers;
@@ -19,11 +22,57 @@ namespace QuickLook.Plugin.PluginManager
 {
     public partial class PluginManagerPanel : UserControl, IDisposable
     {
-        private sealed class ConfigItem
+        private sealed class ConfigItem : INotifyPropertyChanged
         {
+            private bool _isSelected;
+
             public string DisplayName { get; set; }
             public string Path { get; set; }
+            public bool IsLog { get; set; }
+            public string SizeText { get; set; }
+            public string PurposeText { get; set; }
+
+            public bool IsSelected
+            {
+                get { return _isSelected; }
+                set
+                {
+                    if (_isSelected == value) return;
+                    _isSelected = value;
+                    var handler = PropertyChanged;
+                    if (handler != null) handler(this, new PropertyChangedEventArgs("IsSelected"));
+                }
+            }
+
+            public event PropertyChangedEventHandler PropertyChanged;
         }
+
+        /// <summary>可安装页分组头里的缓存提示文字（GroupStyle 模板经 x:Static 绑定到这里）。</summary>
+        public sealed class HintBinder : INotifyPropertyChanged
+        {
+            private string _text = "";
+
+            public string Text
+            {
+                get { return _text; }
+                set
+                {
+                    if (_text == value) return;
+                    _text = value;
+                    var handler = PropertyChanged;
+                    if (handler != null) handler(this, new PropertyChangedEventArgs("Text"));
+                }
+            }
+
+            public event PropertyChangedEventHandler PropertyChanged;
+        }
+
+        public static HintBinder CatalogHint
+        {
+            get { return CatalogHintInstance; }
+        }
+
+        private static readonly HintBinder CatalogHintInstance = new HintBinder();
 
         private readonly InstalledPluginService _installedService = new InstalledPluginService();
         private readonly WikiCatalogService _wikiService = new WikiCatalogService();
@@ -42,6 +91,8 @@ namespace QuickLook.Plugin.PluginManager
         private bool _busy;
         private bool _disposed;
         private bool _autoRefreshTried;
+        private bool _hideInstalled = true;
+        private string _searchText = "";
 
         public PluginManagerPanel()
         {
@@ -67,6 +118,22 @@ namespace QuickLook.Plugin.PluginManager
             {
                 DataRootText.Text = Loc.Get("Msg_NoDataRoot");
                 SetStatus(Loc.Get("Status_NoDataRoot"));
+            }
+
+            try
+            {
+                // 主标题旁显示宿主 QuickLook 的版本（插件自身版本显示在预览窗口标题栏）
+                var exe = Process.GetCurrentProcess().MainModule != null
+                    ? Process.GetCurrentProcess().MainModule.FileName
+                    : null;
+                var raw = string.IsNullOrEmpty(exe) ? null : FileVersionInfo.GetVersionInfo(exe).FileVersion;
+                Version parsed;
+                SelfVersionText.Text = string.IsNullOrEmpty(raw)
+                    ? ""
+                    : Version.TryParse(raw, out parsed) ? "v" + parsed.ToString(3) : "v" + raw;
+            }
+            catch
+            {
             }
 
             LoadInstalled();
@@ -193,7 +260,10 @@ namespace QuickLook.Plugin.PluginManager
             var scan = _installedService.Scan();
             _installed = scan.Plugins;
             InstalledList.ItemsSource = null;
-            InstalledList.ItemsSource = _installed;
+            // 按类型分组（用户插件 / 内置插件 / 散装 DLL）：解释了各行更新/卸载按钮可用性的差异
+            var view = new ListCollectionView(_installed);
+            view.GroupDescriptions.Add(new PropertyGroupDescription("TypeText"));
+            InstalledList.ItemsSource = view;
 
             var userCount = _installed.Count(p => !p.IsBuiltIn);
             var builtInCount = _installed.Count(p => p.IsBuiltIn);
@@ -216,14 +286,14 @@ namespace QuickLook.Plugin.PluginManager
             _catalog = _wikiService.LoadCache();
             if (_catalog == null)
             {
-                AvailableHint.Text = Loc.Get("Available_Empty");
+                CatalogHintInstance.Text = Loc.Get("Available_Empty");
                 AvailableEmpty.Visibility = Visibility.Visible;
                 return;
             }
 
             WikiCatalogService.MergeInstalled(_catalog, _installed);
             BindAvailable();
-            AvailableHint.Text = Loc.Get("Available_Stale");
+            CatalogHintInstance.Text = Loc.Get("Available_Stale");
         }
 
         private void BindAvailable()
@@ -246,23 +316,43 @@ namespace QuickLook.Plugin.PluginManager
         {
             var entry = obj as CatalogEntry;
             if (entry == null) return true;
-            if (HideInstalledCheck != null && HideInstalledCheck.IsChecked == true && entry.IsInstalled)
+            if (_hideInstalled && entry.IsInstalled)
                 return false;
+            if (!string.IsNullOrEmpty(_searchText))
+            {
+                var hit = Matches(entry.Name) || Matches(entry.Description);
+                if (!hit) return false;
+            }
             return true;
+        }
+
+        private bool Matches(string text)
+        {
+            return !string.IsNullOrEmpty(text) &&
+                   text.IndexOf(_searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private void AvailableSearch_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var box = sender as TextBox;
+            _searchText = box == null ? "" : box.Text.Trim();
+            if (_availableView != null)
+            {
+                _availableView.Refresh();
+                UpdateAvailableEmpty();
+            }
         }
 
         private void UpdateAvailableEmpty()
         {
-            var visible = 0;
-            if (_availableView != null)
-            {
-                for (var i = 0; i < _availableView.Count; i++) visible++;
-            }
+            var visible = _availableView == null ? 0 : _availableView.Count;
             AvailableEmpty.Visibility = visible == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void HideInstalled_Changed(object sender, RoutedEventArgs e)
         {
+            var box = sender as CheckBox;
+            if (box != null) _hideInstalled = box.IsChecked == true;
             if (_availableView != null)
             {
                 _availableView.Refresh();
@@ -291,7 +381,7 @@ namespace QuickLook.Plugin.PluginManager
                     _catalog = result.Catalog;
                     WikiCatalogService.MergeInstalled(_catalog, _installed);
                     BindAvailable();
-                    AvailableHint.Text = result.FromCache ? Loc.Get("Available_Stale") : Loc.Get("Available_Fresh");
+                    CatalogHintInstance.Text = result.FromCache ? Loc.Get("Available_Stale") : Loc.Get("Available_Fresh");
                     if (!string.IsNullOrWhiteSpace(result.Error))
                         SetStatus(Loc.Format("Status_CatalogFailed", result.Error));
                     else
@@ -299,7 +389,7 @@ namespace QuickLook.Plugin.PluginManager
                 }
                 else
                 {
-                    AvailableHint.Text = Loc.Format("Status_CatalogFailed", result.Error ?? "");
+                    CatalogHintInstance.Text = Loc.Format("Status_CatalogFailed", result.Error ?? "");
                     SetStatus(Loc.Format("Status_CatalogFailed", result.Error ?? ""));
                 }
             }
@@ -316,16 +406,19 @@ namespace QuickLook.Plugin.PluginManager
             }
         }
 
-        private async void RefreshInstalled_Click(object sender, RoutedEventArgs e)
+        /// <summary>窗口右上角总刷新：按当前页签执行对应的刷新动作。</summary>
+        private async void RefreshButton_Click(object sender, RoutedEventArgs e)
         {
             if (_busy) return;
-            LoadInstalled();
-            await Task.CompletedTask;
-        }
-
-        private async void RefreshCatalog_Click(object sender, RoutedEventArgs e)
-        {
-            await RefreshCatalogAsync(true);
+            var index = Tabs.SelectedIndex;
+            if (index == 0)
+                LoadInstalled();
+            else if (index == 1)
+                await RefreshCatalogAsync(true);
+            else if (index == 2)
+                LoadConfigFiles();
+            else
+                LoadInstalled();
         }
 
         private void OpenDataFolder_Click(object sender, RoutedEventArgs e)
@@ -436,18 +529,6 @@ namespace QuickLook.Plugin.PluginManager
             var plugin = GetPlugin(sender);
             if (plugin == null) return;
             await CheckUpdatesAsync(new List<PluginInfo> { plugin });
-        }
-
-        private async void CheckAllUpdates_Click(object sender, RoutedEventArgs e)
-        {
-            if (_busy) return;
-            var targets = _installed.Where(p => p.CanCheckUpdate).ToList();
-            if (targets.Count == 0)
-            {
-                SetStatus(Loc.Get("Status_NoUpdates"));
-                return;
-            }
-            await CheckUpdatesAsync(targets);
         }
 
         private async Task CheckUpdatesAsync(List<PluginInfo> targets)
@@ -571,20 +652,16 @@ namespace QuickLook.Plugin.PluginManager
         {
             var items = new List<ConfigItem>();
             foreach (var file in _configService.GetConfigFiles())
-            {
-                items.Add(new ConfigItem { DisplayName = Path.GetFileName(file), Path = file });
-            }
+                items.Add(MakeConfigItem(file, false));
 
             var logPath = _configService.LogPath;
             if (!string.IsNullOrWhiteSpace(logPath) && File.Exists(logPath))
-            {
-                items.Add(new ConfigItem { DisplayName = Path.GetFileName(logPath), Path = logPath });
-            }
+                items.Add(MakeConfigItem(logPath, true));
 
-            ConfigList.ItemsSource = items;
+            ConfigCards.ItemsSource = items;
             if (items.Count > 0)
             {
-                ConfigList.SelectedIndex = 0;
+                SelectConfigCard(items[0]);
             }
             else
             {
@@ -593,27 +670,69 @@ namespace QuickLook.Plugin.PluginManager
             }
         }
 
-        private void ConfigList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private static ConfigItem MakeConfigItem(string file, bool isLog)
         {
-            var item = ConfigList.SelectedItem as ConfigItem;
-            if (item == null) return;
+            string sizeText = "";
+            try
+            {
+                var bytes = new FileInfo(file).Length;
+                sizeText = bytes >= 1024 * 1024
+                    ? (bytes / 1048576.0).ToString("0.0") + " MB"
+                    : Math.Max(1, bytes / 1024) + " KB";
+            }
+            catch
+            {
+            }
+
+            return new ConfigItem
+            {
+                DisplayName = Path.GetFileName(file),
+                Path = file,
+                IsLog = isLog,
+                SizeText = sizeText,
+                PurposeText = isLog
+                    ? Loc.Get("Config_PurposeLog")
+                    : string.Equals(Path.GetFileName(file), "QuickLook.config",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? Loc.Get("Config_PurposeMain")
+                        : Loc.Get("Config_PurposePlugin")
+            };
+        }
+
+        private void ConfigCards_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            // ItemsControl.ItemsPanelRoot 在 net462 不可用，从视觉树取第一个子面板（即 UniformGrid）
+            if (VisualTreeHelper.GetChildrenCount(ConfigCards) == 0) return;
+            var grid = VisualTreeHelper.GetChild(ConfigCards, 0) as UniformGrid;
+            if (grid == null) return;
+            grid.Columns = Math.Max(1, Math.Min(4, (int)(ConfigCards.ActualWidth / 260)));
+        }
+
+        private void SelectConfigCard(ConfigItem item)
+        {
+            var items = ConfigCards.ItemsSource as IEnumerable<ConfigItem>;
+            if (items != null)
+            {
+                foreach (var i in items)
+                    i.IsSelected = ReferenceEquals(i, item);
+            }
+
             _selectedConfigPath = item.Path;
             ConfigText.Text = _configService.ReadText(item.Path);
         }
 
-        private void OpenConfig_Click(object sender, RoutedEventArgs e)
+        private void ConfigCard_Click(object sender, MouseButtonEventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(_selectedConfigPath))
-            {
-                SetStatus(Loc.Get("Config_NoFiles"));
-                return;
-            }
-            RepairService.RevealFile(_selectedConfigPath);
+            var element = sender as FrameworkElement;
+            var item = element == null ? null : element.Tag as ConfigItem;
+            if (item != null) SelectConfigCard(item);
         }
 
-        private void CopyConfig_Click(object sender, RoutedEventArgs e)
+        private void ConfigCopy_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(ConfigText.Text)) return;
+            var item = GetConfigItem(sender);
+            if (item != null) SelectConfigCard(item);
+            if (string.IsNullOrEmpty(ConfigText.Text)) return;
             try
             {
                 Clipboard.SetText(ConfigText.Text);
@@ -625,7 +744,31 @@ namespace QuickLook.Plugin.PluginManager
             }
         }
 
-        private async void ClearLog_Click(object sender, RoutedEventArgs e)
+        private void ConfigReveal_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetConfigItem(sender);
+            if (item == null || string.IsNullOrWhiteSpace(item.Path))
+            {
+                SetStatus(Loc.Get("Config_NoFiles"));
+                return;
+            }
+            RepairService.RevealFile(item.Path);
+        }
+
+        private async void ConfigClearLog_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetConfigItem(sender);
+            if (item != null) SelectConfigCard(item);
+            await ClearLogAsync();
+        }
+
+        private static ConfigItem GetConfigItem(object sender)
+        {
+            var element = sender as FrameworkElement;
+            return element == null ? null : element.Tag as ConfigItem;
+        }
+
+        private async Task ClearLogAsync()
         {
             var logPath = _configService.LogPath;
             if (string.IsNullOrWhiteSpace(logPath) || !File.Exists(logPath))
@@ -724,7 +867,8 @@ namespace QuickLook.Plugin.PluginManager
 
                 // Show the report in the confirm overlay so it stays readable.
                 await ConfirmAsync(Loc.Get("Repair_NetworkDiag"),
-                    RepairService.FormatProbeResult(result), Loc.Get("Btn_Close"));
+                    RepairService.FormatProbeResult(result), Loc.Get("Btn_Close"),
+                    hideCancel: true, monospace: true);
                 SetStatus(Loc.Get("Status_NetworkDiagDone"));
             }
             catch (OperationCanceledException)
@@ -751,13 +895,17 @@ namespace QuickLook.Plugin.PluginManager
             HandoffOverlay.Visibility = Visibility.Collapsed;
         }
 
-        private Task<bool> ConfirmAsync(string title, string message, string okText)
+        private Task<bool> ConfirmAsync(string title, string message, string okText,
+            bool hideCancel = false, bool monospace = false)
         {
             if (_confirm != null) return Task.FromResult(false);
             _confirm = new TaskCompletionSource<bool>();
             ConfirmTitle.Text = title;
             ConfirmMessage.Text = message;
             ConfirmOk.Content = okText;
+            ConfirmCancel.Visibility = hideCancel ? Visibility.Collapsed : Visibility.Visible;
+            ConfirmMessage.FontFamily = monospace ? new FontFamily("Consolas") : SystemFonts.MessageFontFamily;
+            ConfirmDialog.Width = monospace ? 560 : 440;
             ConfirmOverlay.Visibility = Visibility.Visible;
             return _confirm.Task;
         }

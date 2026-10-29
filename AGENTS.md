@@ -20,7 +20,7 @@ management panel instead of the binary viewer.
 
 - `Plugin.cs` - `IViewer` entry point; `Priority = 100`, rejects `.qlplugin`,
   accepts paths under the QuickLook data root.
-- `PluginManagerPanel.xaml(.cs)` - tabbed UI: Installed, Available, Config & Logs, Repair.
+- `PluginManagerPanel.xaml(.cs)` - tabbed UI: Installed (two-line width-proof rows), Available (Wiki catalog, 活跃/旧版 groups), Config & Logs (file cards + click-to-preview), Repair (single card, divided rows).
 - `Services/DataRootResolver.cs` - reflects `App.UserPluginPath` /
   `SettingHelper.LocalDataPath`; validates the data root.
 - `Services/InstalledPluginService.cs` - scans user and built-in plugins, safe uninstall.

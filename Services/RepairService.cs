@@ -321,22 +321,28 @@ namespace QuickLook.Plugin.PluginManager.Services
         {
             if (result == null || result.Lines.Count == 0) return "";
             var sb = new StringBuilder();
+            string last = null;
             foreach (var line in result.Lines)
             {
-                if (sb.Length > 0) sb.AppendLine();
+                string text;
                 if (line.HttpOk)
                 {
-                    sb.Append(line.Label).Append(" OK ").Append(line.ElapsedMs).Append("ms");
+                    text = line.Label + " OK " + line.ElapsedMs + "ms";
                 }
                 else
                 {
                     var stage = line.DnsOk ? (line.TcpOk ? "HTTP" : "TCP") : "DNS";
-                    sb.Append(line.Label).Append(" FAIL@").Append(stage);
-                    if (!string.IsNullOrWhiteSpace(line.Detail))
-                        sb.Append(" ").Append(line.Detail);
-                    else
-                        sb.Append(" ").Append(line.ElapsedMs).Append("ms");
+                    text = line.Label + " FAIL@" + stage;
+                    text += !string.IsNullOrWhiteSpace(line.Detail)
+                        ? " " + line.Detail
+                        : " " + line.ElapsedMs + "ms";
                 }
+
+                // 同一目标多轮探测结果相同时只显示一次
+                if (text == last) continue;
+                if (sb.Length > 0) sb.AppendLine();
+                sb.Append(text);
+                last = text;
             }
             return sb.ToString();
         }

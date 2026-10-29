@@ -250,7 +250,8 @@ namespace QuickLook.Plugin.PluginManager.Services
             {
                 Name = metadata != null ? metadata.Namespace : Path.GetFileNameWithoutExtension(dll),
                 Namespace = metadata != null ? metadata.Namespace : Path.GetFileNameWithoutExtension(dll),
-                Version = metadata != null ? metadata.Version : GetFileVersion(dll),
+                // Metadata.config 的 <Version> 是元数据格式版本（恒为 1），插件真实版本在程序集 FileVersion 里
+                Version = GetFileVersion(dll) ?? (metadata != null ? metadata.Version : null),
                 Description = metadata != null ? metadata.Description : "",
                 FolderPath = dir,
                 DllPath = dll,
@@ -293,8 +294,21 @@ namespace QuickLook.Plugin.PluginManager.Services
             try
             {
                 var info = FileVersionInfo.GetVersionInfo(path);
-                if (!string.IsNullOrWhiteSpace(info.FileVersion)) return info.FileVersion;
-                if (!string.IsNullOrWhiteSpace(info.ProductVersion)) return info.ProductVersion;
+                // 未写 AssemblyFileVersion 的程序集会得到 0.0.0.0，视为没有版本信息
+                if (!string.IsNullOrWhiteSpace(info.FileVersion) && info.FileVersion != "0.0.0.0")
+                    return info.FileVersion;
+
+                // 退回 InformationalVersion（可能带 -g<hash> / +meta 尾巴，截掉）
+                var pv = info.ProductVersion;
+                if (!string.IsNullOrWhiteSpace(pv))
+                {
+                    var cut = pv.IndexOfAny(new[] { '-', '+' });
+                    if (cut > 0) pv = pv.Substring(0, cut);
+                    foreach (var c in pv)
+                    {
+                        if (char.IsDigit(c)) return pv;
+                    }
+                }
             }
             catch
             {
