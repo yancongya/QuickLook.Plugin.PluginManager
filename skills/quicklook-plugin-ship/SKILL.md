@@ -527,8 +527,10 @@ I'd like to add my {Format} viewer plugin to the Available Plugins list.
 
 ### Wiki 表格行格式
 
+官方 Available-Plugins 活跃列表是**裸行**（无 `|` 前缀、无表头对齐），追加到列表末尾，描述建议中英双语：
+
 ```
-| [{FormatName}](https://github.com/{user}/{repo}) v{version} | {YYYY-MM-DD} | [Link](https://github.com/{user}/{repo}/releases) | {一句话描述} |
+[{FormatName}](https://github.com/{user}/{repo}) v{version} | {YYYY-MM-DD} | [Link](https://github.com/{user}/{repo}/releases) | {一句话描述} / {中文描述}
 ```
 
 ## 完成定义（DoD）

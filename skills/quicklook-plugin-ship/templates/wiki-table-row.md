@@ -1,1 +1,1 @@
-| [{FormatName}](https://github.com/{user}/{repo}) v{version} | {YYYY-MM-DD} | [Link](https://github.com/{user}/{repo}/releases) | Preview {FormatFullName} ({Extension}) files using {technology}. |
+[{FormatName}](https://github.com/{user}/{repo}) v{version} | {YYYY-MM-DD} | [Link](https://github.com/{user}/{repo}/releases) | Preview {FormatFullName} ({Extension}) files using {technology}. / 预览{格式中文名}（{扩展名}）文件
