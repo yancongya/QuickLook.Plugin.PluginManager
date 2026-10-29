@@ -1,5 +1,7 @@
 # QuickLook.Plugin.PluginManager
 
+> 同系列插件 / More plugins: [SvgaViewer](https://github.com/yancongya/QuickLook.Plugin.SvgaViewer) · [PagViewer](https://github.com/yancongya/QuickLook.Plugin.PagViewer) · [AlphaVideoViewer](https://github.com/yancongya/QuickLook.Plugin.AlphaVideoViewer)
+
 预览 QuickLook 自身数据文件夹时打开的插件管理面板。
 
 ## 中文
